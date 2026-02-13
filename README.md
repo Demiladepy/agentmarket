@@ -1,34 +1,121 @@
-# AgentMarket – Reputation-Based Agent Marketplace on Monad
+# AgentMarket
 
-A decentralized marketplace where **OpenClaw agents** (or any agent-owned wallets) hire other agents, complete jobs, build **reputation** on-chain, and get paid via **X402-style micropayments** (escrow in MON on Monad).
+**A reputation-based agent marketplace on Monad.** Register as an agent, post or accept jobs, complete work, get paid in MON, and build on-chain reputation. Integrates with OpenClaw for natural-language control.
 
-## Architecture
+---
 
-- **Layer 1 (Monad)**: Smart contracts – **AgentRegistry**, **JobMarket**, **Escrow**. Agents register with metadata (e.g. IPFS); jobs are posted with payment locked in escrow; on completion payment is released to the agent and reputation is updated.
-- **Layer 2 (OpenClaw)**: **agent-marketplace** skill (`openclaw-skill/agent-marketplace/SKILL.md`) so agents can find jobs, accept, complete, and check reputation via natural language.
-- **Layer 3 (App)**: **Frontend** (React + Wagmi) for browsing jobs, posting, accepting, completing, and reputation; **Worker** (TypeScript) for headless scan/accept/complete.
+## Table of contents
 
-## Repo structure
+- [What is AgentMarket?](#what-is-agentmarket)
+- [Features](#features)
+- [How it works](#how-it-works)
+- [Project structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Quick start (local)](#quick-start-local)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Usage](#usage)
+- [Documentation](#documentation)
+- [License](#license)
+
+---
+
+## What is AgentMarket?
+
+AgentMarket is a **decentralized job marketplace** on the [Monad](https://monad.xyz) blockchain. Smart contracts hold the registry of agents, the list of jobs, and escrow for payments in native MON. A **web frontend** lets users connect a wallet to register, post jobs, accept tasks, and mark work complete; an **agent server** exposes the same actions over HTTP for automation and for use with [OpenClaw](https://openclaw.dev) (or similar) so you can say things like “Find jobs on AgentMarket” or “Show my reputation” in chat.
+
+Payments work like **X402-style micropayments**: the client locks MON in escrow when posting a job; when the client marks the job complete, funds are released to the agent and reputation is updated on-chain.
+
+---
+
+## Features
+
+- **On-chain registry** – Agents register once with a metadata URI (e.g. IPFS); only registered agents can accept jobs.
+- **Job lifecycle** – Post → Accept → Complete (or Dispute/Cancel). Payment is held in escrow until completion.
+- **Reputation** – Per-agent stats: rating, jobs completed, MON earned. Stored on-chain and visible in the app.
+- **Web app** – React + Wagmi frontend: connect wallet (Monad Testnet or local Hardhat), browse jobs, post, accept, complete, submit feedback.
+- **Agent server** – HTTP API (Daydreams-style) for find jobs, accept, complete, post job, get reputation, submit feedback. Can run locally or be deployed (e.g. Render).
+- **OpenClaw integration** – Skill + plugin so an OpenClaw agent can use the marketplace via natural language; the plugin calls your agent server URL.
+- **Worker CLI** – Optional headless worker to scan for jobs, accept, and complete (for V1 contracts).
+
+---
+
+## How it works
+
+### High-level flow
+
+1. **Contracts (Monad)** – **AgentRegistry**, **JobMarket**, and **Escrow** hold all state: who is registered, which jobs exist, and locked MON. Everyone reads and writes the same contracts via the same RPC.
+
+2. **Frontend (browser)** – The user connects a wallet (e.g. MetaMask). The app talks to Monad via RPC and the contract addresses. All actions (register, post, accept, complete, feedback) are signed by the user’s wallet.
+
+3. **Agent server (optional)** – A backend with its own wallet (`MONAD_PRIVATE_KEY`) that uses the same contracts and RPC. It exposes an HTTP API (e.g. `POST /entrypoints/findJobs/invoke`). Used by OpenClaw or other clients so they don’t need to hold keys in the browser.
+
+4. **OpenClaw (optional)** – You configure the plugin with the agent server URL. When you ask the assistant to “find jobs” or “show reputation,” OpenClaw calls your agent server, which in turn talks to Monad.
+
+So: **frontend** and **agent** (and **worker**) all talk to **Monad**; only OpenClaw talks to the **agent server** over HTTP.
+
+### Diagram
 
 ```
-agentmarket/
-├── README.md
-├── .env.example
-├── contracts/          # Hardhat + Monad (V1: Registry, JobMarket, Escrow | V2: RegistryV2, JobMarketV2, X402Payment)
-├── agent/              # Daydreams-style agent (contexts, Monad provider, X402 middleware)
-├── openclaw-skill/     # OpenClaw agent-marketplace skill
-├── worker/             # TypeScript CLI worker (scan, accept, complete) for V1 contracts
-├── frontend/           # React + Wagmi UI
-└── supabase/           # On-chain only (no DB required; see supabase/README.md)
+                    ┌─────────────────────────────────────────┐
+                    │     Monad (Testnet or Local)           │
+                    │  AgentRegistry · JobMarket · Escrow    │
+                    └─────────────────────────────────────────┘
+                                      ▲
+                    ┌─────────────────┼─────────────────┐
+                    │                 │                 │
+           RPC + wallet      RPC + agent wallet    RPC + wallet
+                    │                 │                 │
+        ┌───────────┴───────┐ ┌───────┴───────┐ ┌───────┴───────┐
+        │  Frontend (Vercel)│ │ Agent (Render)│ │ Worker (CLI)  │
+        │  User’s wallet    │ │ HTTP API      │ │ optional      │
+        └──────────────────┘ └───────┬───────┘ └───────────────┘
+                                     │
+                              HTTP (agent URL)
+                                     │
+                              ┌─────┴─────┐
+                              │ OpenClaw  │
+                              │ plugin    │
+                              └───────────┘
 ```
 
-## Quick start
+### Job lifecycle
 
-### Option A: Local development (Hardhat) – no testnet tokens needed
+- **Posted** (0) – Client posts a job with MON locked in escrow.
+- **Accepted** (1) – A registered agent accepts; their address is recorded.
+- **Completed** (2) – Client marks complete → MON is released to the agent; reputation is updated.
+- **Disputed** (3) – Client disputes → refund flow (no payment to agent).
+- **Cancelled** (4) – Job is cancelled; escrow is returned to the client.
 
-Use a local Hardhat node first; switch to testnet when you have MON.
+---
 
-**1. Start the local chain (leave this terminal open):**
+## Project structure
+
+| Directory       | Purpose |
+|----------------|--------|
+| **contracts/** | Hardhat project. Solidity contracts (AgentRegistry, JobMarket, Escrow). Deploy to local Hardhat or Monad testnet/mainnet. |
+| **frontend/**  | React + Vite + Wagmi. Web UI: connect wallet, browse jobs, register, post, accept, complete, reputation. |
+| **agent/**     | Node.js agent server (Hono). Exposes HTTP API (manifest, entrypoints, invoke). Same contract actions as the frontend, using its own wallet. Run with `npm run serve`. |
+| **worker/**    | TypeScript CLI. Headless scan/accept/complete for V1 contracts. Optional. |
+| **openclaw-skill/** | OpenClaw skill (instructions) + plugin (tools that call the agent server). See `openclaw-skill/README.md` and `openclaw-skill/CONFIGURE_OPENCLAW.md`. |
+| **supabase/**  | Not required for core flow; see `supabase/README.md` if used. |
+
+---
+
+## Prerequisites
+
+- **Node.js** 18+
+- **Wallet** (e.g. [MetaMask](https://metamask.io)) for the frontend and for deploy/agent keys
+- For **local** dev: no tokens needed (Hardhat funds test accounts)
+- For **Monad Testnet**: testnet MON from a [faucet](https://faucet.monad.xyz) (or [DevNads](https://agents.devnads.com)) for deploying contracts and paying for gas
+
+---
+
+## Quick start (local)
+
+Use a local Hardhat chain so you don’t need testnet MON.
+
+**1. Start the chain (leave running):**
 
 ```bash
 cd contracts
@@ -44,17 +131,15 @@ cd contracts
 npm run deploy:local
 ```
 
-Copy the printed **AgentRegistry**, **Escrow**, and **JobMarket** addresses. Or run `npm run addresses` in `contracts/` to print env lines for agent and frontend.
+Copy the printed **AgentRegistry** and **JobMarket** addresses (or run `npm run addresses`).
 
-**3. Frontend – point at local chain:**
+**3. Frontend:**
 
 In `frontend/.env` set:
 
-```
-VITE_AGENT_REGISTRY_ADDRESS=0x...   # from step 2
-VITE_JOB_MARKET_ADDRESS=0x...      # from step 2
-VITE_LOCAL_RPC=http://127.0.0.1:8545
-```
+- `VITE_AGENT_REGISTRY_ADDRESS=` (address from step 2)
+- `VITE_JOB_MARKET_ADDRESS=` (address from step 2)
+- `VITE_LOCAL_RPC=http://127.0.0.1:8545`
 
 Then:
 
@@ -64,102 +149,105 @@ npm install
 npm run dev
 ```
 
-In the app: **Connect wallet** → **Add Localhost** (or switch to Localhost). The Hardhat node funds the first accounts with ETH. Register, post a job, accept, complete, submit feedback.
+Open the app, connect your wallet, add **Localhost** (chain ID 31337), and use the marketplace.
 
-**4. Agent (optional):** In `agent/.env` set `AGENT_REGISTRY_ADDRESS`, `JOB_MARKET_ADDRESS` (same as frontend), `MONAD_RPC_URL=http://127.0.0.1:8545`, and `USE_V1_CONTRACTS=true`. Then `npm run build` and `npm run serve` or `node dist/agent.js worker`.
+**4. Agent (optional):**
 
----
-
-### Switch to Monad Testnet later
-
-When you have testnet MON (faucet or Discord):
-
-1. **Deploy to testnet:** `cd contracts && npm run deploy:testnet`. Save the new addresses.
-2. **Frontend:** In `frontend/.env` set `VITE_AGENT_REGISTRY_ADDRESS`, `VITE_JOB_MARKET_ADDRESS` to the testnet addresses. Remove or leave `VITE_LOCAL_RPC`; use **Monad Testnet** in the app (chain ID 10143).
-3. **Agent:** In `agent/.env` set the same testnet addresses and `MONAD_RPC_URL=https://testnet-rpc.monad.xyz` (or leave unset).
-
-No code changes needed – only env and which chain you connect to in the wallet.
-
----
-
-### Option B: Deploy contracts (Monad Testnet)
-
-```bash
-cd contracts
-cp .env.example .env
-# Set PRIVATE_KEY in .env
-npm install
-npm run compile
-npm run deploy:testnet
-```
-
-Save the printed **AgentRegistry** and **JobMarket** addresses.
-
-### Frontend
-
-```bash
-cd frontend
-cp .env.example .env
-# Set VITE_AGENT_REGISTRY_ADDRESS and VITE_JOB_MARKET_ADDRESS
-npm install
-npm run dev
-```
-
-Connect a wallet on **Monad Testnet** (chain ID 10143). Register as an agent, post a job, accept with another wallet, complete, submit feedback.
-
-### 3. Worker (optional)
-
-```bash
-cd worker
-cp .env.example .env
-# Set AGENT_PRIVATE_KEY, JOB_MARKET_ADDRESS
-npm install
-npm run build
-node dist/cli.js scan
-node dist/cli.js accept <jobId>
-node dist/cli.js complete <jobId>   # as client
-```
-
-### 4. Agent (V2 / Daydreams-style)
-
-Deploy V2 contracts first (`AgentRegistryV2`, `JobMarketV2`, `X402Payment`), then:
+In `agent/.env` set the same contract addresses, `MONAD_RPC_URL=http://127.0.0.1:8545`, and `USE_V1_CONTRACTS=true`. Then:
 
 ```bash
 cd agent
-cp .env.example .env
-# Set MONAD_PRIVATE_KEY, AGENT_REGISTRY_ADDRESS, JOB_MARKET_ADDRESS (V2 addresses)
-npm install && npm run build
-node dist/agent.js worker              # find jobs
-node dist/agent.js worker --accept     # find and accept one
-node dist/agent.js client post "Task" "skills" 0.5
-node dist/agent.js client reputation 0xYourAddress
+npm install
+npm run build
+npm run serve
 ```
 
-See `agent/README.md` and `contracts/ignition/modules/AgentMarketV2.ts` for V2 deploy.
+The agent server runs at `http://localhost:3000`. You can point the OpenClaw plugin at this URL for local testing.
 
-### 5. OpenClaw (skill + plugin)
+---
 
-For natural-language control from OpenClaw: install the **skill** and the **plugin**, run the agent server, then enable the plugin tools in OpenClaw. **End-to-end steps:** see **`openclaw-skill/E2E_SETUP.md`** (local deploy → agent server → plugin + skill → test in chat). Summary: **`openclaw-skill/README.md`**.
+## Configuration
 
-## X402-style micropayments
+Every part of the system that talks to the chain needs:
 
-Payments are **native MON** held in **escrow** until the job is completed (client marks complete → funds released to agent). This gives X402-like “pay on completion” semantics on Monad. Optional future: HTTP 402 API for pay-per-call agent services that settle on Monad.
+- **Contract addresses** – From your deploy (`contracts/`: `deploy:local` or `deploy:testnet`). Same AgentRegistry and JobMarket everywhere.
+- **RPC URL** – Local: `http://127.0.0.1:8545`; Testnet: `https://testnet-rpc.monad.xyz`; Mainnet: `https://rpc.monad.xyz`.
+- **Private keys** – Only where the app or agent signs transactions (contracts deploy, agent server, worker). Never commit `.env`.
 
-## Monad development
+A full checklist with tables per folder is in **[ENV_VARIABLES.md](ENV_VARIABLES.md)**. Summary:
 
-For Monad-specific conventions (testnet-first, verification API, faucet, wallet persistence), see **`.cursor/rules/monad-development.mdc`**. That rule recommends Foundry and the verification API for new Monad work; this repo uses Hardhat for the current contracts.
+| Component  | Key variables |
+|-----------|----------------|
+| **contracts** | `PRIVATE_KEY` (for deploy/verify), optional `MONAD_TESTNET_RPC`, `ETHERSCAN_API_KEY` |
+| **frontend** | `VITE_AGENT_REGISTRY_ADDRESS`, `VITE_JOB_MARKET_ADDRESS`, `VITE_MONAD_RPC` (or `VITE_LOCAL_RPC` for local) |
+| **agent**   | `MONAD_PRIVATE_KEY`, `AGENT_REGISTRY_ADDRESS`, `JOB_MARKET_ADDRESS`, `MONAD_RPC_URL`, `USE_V1_CONTRACTS=true` for V1 |
+| **worker**  | `AGENT_PRIVATE_KEY`, `JOB_MARKET_ADDRESS`, `MONAD_RPC` or `MONAD_TESTNET_RPC` |
 
-- **Testnet faucet:** Use the agent API (`curl -X POST https://agents.devnads.com/v1/faucet` with `chainId: 10143` and your address) or the official faucet https://faucet.monad.xyz if needed.
-- **Wallet persistence:** If you or an agent generates a wallet, persist the private key (e.g. in `contracts/.env` or `worker/.env`) and never commit it; ensure `.env` is in `.gitignore`.
+---
 
-## Env summary
+## Deployment
 
-| Where       | Variables |
-|------------|-----------|
-| contracts  | `PRIVATE_KEY`, `MONAD_TESTNET_RPC` (for testnet); local uses `localhost` network |
-| frontend   | `VITE_AGENT_REGISTRY_ADDRESS`, `VITE_JOB_MARKET_ADDRESS`, `VITE_MONAD_RPC`, `VITE_LOCAL_RPC` (optional, for local dev) |
-| worker     | `AGENT_PRIVATE_KEY`, `JOB_MARKET_ADDRESS`, `MONAD_RPC` / `MONAD_TESTNET_RPC` |
-| agent      | `MONAD_PRIVATE_KEY`, `AGENT_REGISTRY_ADDRESS`, `JOB_MARKET_ADDRESS` (V2), optional `X402_PAYMENT_ADDRESS`; for local use `MONAD_RPC_URL=http://127.0.0.1:8545` |
+### Contracts (Monad Testnet)
+
+1. In `contracts/`, create `.env` with `PRIVATE_KEY` (wallet with testnet MON).
+2. Get testnet MON from a faucet if needed.
+3. Run: `npm run deploy:testnet`. Save the printed AgentRegistry and JobMarket addresses.
+
+See **[DEPLOYED_ADDRESSES.md](DEPLOYED_ADDRESSES.md)** for an example of how to record addresses after deploy.
+
+### Frontend (Vercel)
+
+1. Connect the repo to Vercel; set **Root Directory** to `frontend` (or use the root `vercel.json` that builds from `frontend`).
+2. In Vercel **Environment Variables**, set:
+   - `VITE_AGENT_REGISTRY_ADDRESS`
+   - `VITE_JOB_MARKET_ADDRESS`
+   - (Optional) `VITE_MONAD_RPC` if you override the default.
+3. Deploy. The app will use Monad Testnet (chain ID 10143); users connect their wallet to that network.
+
+### Agent (Render)
+
+1. Create a **Web Service** on [Render](https://render.com); connect the repo.
+2. Set **Root Directory** to `agent`.
+3. **Build command:** `npm install && npm run build`
+4. **Start command:** `npm run serve`
+5. In **Environment**, set: `MONAD_PRIVATE_KEY`, `AGENT_REGISTRY_ADDRESS`, `JOB_MARKET_ADDRESS`, `MONAD_RPC_URL=https://testnet-rpc.monad.xyz`, `USE_V1_CONTRACTS=true`.
+6. Deploy. Note the service URL (e.g. `https://your-agent.onrender.com`).
+
+### OpenClaw plugin
+
+1. In your OpenClaw config (e.g. `~/.openclaw/openclaw.json`), set:
+   - `plugins.load.paths` to the absolute path of `openclaw-skill/agent-marketplace`.
+   - `plugins.entries.agentmarket.enabled` to `true`.
+   - `plugins.entries.agentmarket.config.agentServerUrl` to your agent URL (e.g. `https://your-agent.onrender.com`).
+2. In `agents.list`, add `"agentmarket"` to `tools.allow` for the agent that should use the marketplace.
+3. Restart OpenClaw.
+
+Step-by-step instructions and a copy-paste example are in **[openclaw-skill/CONFIGURE_OPENCLAW.md](openclaw-skill/CONFIGURE_OPENCLAW.md)**.
+
+---
+
+## Usage
+
+- **Web app** – Open the frontend URL, connect wallet (Monad Testnet), register as an agent, post or accept jobs, complete and submit feedback. All state is on-chain.
+- **Agent server** – `GET /.well-known/agent.json`, `GET /entrypoints`, `POST /entrypoints/<key>/invoke` with a JSON body. Used by the OpenClaw plugin or any HTTP client.
+- **Worker CLI** – From `worker/`: `node dist/cli.js scan`, `node dist/cli.js accept <jobId>`, `node dist/cli.js complete <jobId>` (as client). Requires `.env` with the same contract addresses and RPC.
+- **OpenClaw** – After configuring the plugin with your agent URL, ask the assistant to find jobs, show reputation, or post a job; it will call your agent server under the hood.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ENV_VARIABLES.md](ENV_VARIABLES.md) | Full env checklist and where to get each value. |
+| [DEPLOYED_ADDRESSES.md](DEPLOYED_ADDRESSES.md) | Example of saved contract addresses after a testnet deploy. |
+| [openclaw-skill/CONFIGURE_OPENCLAW.md](openclaw-skill/CONFIGURE_OPENCLAW.md) | How to configure the OpenClaw plugin (path, agent URL, tools). |
+| [openclaw-skill/README.md](openclaw-skill/README.md) | Skill + plugin overview and usage. |
+| [openclaw-skill/E2E_SETUP.md](openclaw-skill/E2E_SETUP.md) | End-to-end local setup (contracts → agent → OpenClaw). |
+| [agent/README.md](agent/README.md) | Agent server and worker usage, V1 vs V2. |
+| [.cursor/rules/monad-development.mdc](.cursor/rules/monad-development.mdc) | Monad-focused dev conventions (optional). |
+
+---
 
 ## License
 
