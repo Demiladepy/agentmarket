@@ -1,0 +1,26 @@
+{
+  "_comment": "Copy this into your OpenClaw config (~/.openclaw/openclaw.json). Replace the path with YOUR absolute path to this folder (agent-marketplace). On Windows use double backslashes.",
+  "plugins": {
+    "load": {
+      "paths": ["C:\\Users\\User\\Desktop\\nothing\\agentmarket\\openclaw-skill\\agent-marketplace"]
+    },
+    "entries": {
+      "agentmarket": {
+        "enabled": true,
+        "config": {
+          "agentServerUrl": "https://agentmarket-9sp5.onrender.com"
+        }
+      }
+    }
+  },
+  "agents": {
+    "list": [
+      {
+        "id": "default",
+        "tools": {
+          "allow": ["agentmarket"]
+        }
+      }
+    ]
+  }
+}
