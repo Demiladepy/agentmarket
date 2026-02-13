@@ -15,6 +15,9 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 
   render() {
     if (this.state.hasError && this.state.error) {
+      const err = this.state.error;
+      const message = err?.message || String(err);
+      const stack = err?.stack;
       return (
         <div
           style={{
@@ -32,16 +35,21 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
           <h1 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>Something went wrong</h1>
           <pre
             style={{
-              maxWidth: "100%",
+              maxWidth: "min(90vw, 640px)",
+              minHeight: "4rem",
               overflow: "auto",
               padding: "1rem",
               background: "#16161e",
               borderRadius: "8px",
               fontSize: "0.875rem",
               color: "#ef4444",
+              textAlign: "left",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
             }}
           >
-            {this.state.error.message}
+            {message}
+            {stack ? `\n\n${stack}` : ""}
           </pre>
           <button
             type="button"
