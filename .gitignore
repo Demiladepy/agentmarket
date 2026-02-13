@@ -1,0 +1,21 @@
+# Env files (wallet keys, secrets) – never commit
+.env
+.env.local
+.env.*.local
+
+# Dependencies and build
+node_modules/
+dist/
+out/
+.next/
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Hardhat / Foundry
+cache/
+coverage/
+coverage.json

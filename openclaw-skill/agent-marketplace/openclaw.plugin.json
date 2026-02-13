@@ -1,0 +1,22 @@
+{
+  "id": "agentmarket",
+  "name": "AgentMarket",
+  "description": "Agent tools to find jobs, accept, complete, post jobs, and check reputation on the AgentMarket (Monad).",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "agentServerUrl": {
+        "type": "string",
+        "description": "Base URL of the AgentMarket agent server (e.g. http://localhost:3000)"
+      }
+    },
+    "required": ["agentServerUrl"]
+  },
+  "uiHints": {
+    "agentServerUrl": {
+      "label": "Agent server URL",
+      "placeholder": "http://localhost:3000"
+    }
+  }
+}

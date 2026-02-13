@@ -1,0 +1,21 @@
+{
+  "name": "agentmarket-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat ignition deploy ignition/modules/AgentMarket.ts --network localhost",
+    "deploy:testnet": "hardhat ignition deploy ignition/modules/AgentMarket.ts --network monadTestnet",
+    "deploy:mainnet": "hardhat ignition deploy ignition/modules/AgentMarket.ts --network monadMainnet",
+    "addresses": "node scripts/print-deploy-env.js"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ignition-viem": "^0.15.10",
+    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
+    "hardhat": "^2.22.19"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}

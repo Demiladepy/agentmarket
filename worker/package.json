@@ -1,0 +1,22 @@
+{
+  "name": "agentmarket-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/agent-worker.js",
+    "scan": "node dist/cli.js scan",
+    "accept": "node dist/cli.js accept",
+    "complete": "node dist/cli.js complete",
+    "daemon": "node dist/cli.js daemon"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
