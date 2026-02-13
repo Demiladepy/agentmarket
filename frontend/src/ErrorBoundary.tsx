@@ -2,7 +2,9 @@ import React from "react";
 
 type State = { hasError: boolean; error?: Error };
 
-export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
+type Props = { children: React.ReactNode; inline?: boolean };
+
+export class ErrorBoundary extends React.Component<Props, State> {
   state: State = { hasError: false };
 
   static getDerivedStateFromError(error: Error): State {
@@ -13,11 +15,26 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
     console.error("App error:", error, errorInfo);
   }
 
+  reset = () => this.setState({ hasError: false, error: undefined });
+
   render() {
     if (this.state.hasError && this.state.error) {
       const err = this.state.error;
       const message = err?.message || String(err);
       const stack = err?.stack;
+      const inline = this.props.inline;
+
+      if (inline) {
+        return (
+          <span style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>
+            Wallet unavailable{" "}
+            <button type="button" className="btn btn--ghost" style={{ padding: "0 0.25rem" }} onClick={this.reset}>
+              Retry
+            </button>
+          </span>
+        );
+      }
+
       return (
         <div
           style={{
@@ -53,7 +70,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
           </pre>
           <button
             type="button"
-            onClick={() => this.setState({ hasError: false, error: undefined })}
+            onClick={this.reset}
             style={{
               marginTop: "1rem",
               padding: "0.5rem 1rem",

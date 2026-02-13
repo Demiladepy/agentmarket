@@ -9,6 +9,7 @@ import { JobDetail } from "./pages/JobDetail";
 import { AgentProfile } from "./pages/AgentProfile";
 import { Dashboard } from "./pages/Dashboard";
 import { ToastProvider, ToastContainer } from "./contexts/ToastContext";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 function Nav() {
   const location = useLocation();
@@ -89,10 +90,13 @@ function ConnectWallet() {
       <button
         type="button"
         className="btn btn--primary"
-        onClick={() => connect({ connector: connectors[0] })}
-        disabled={isPending}
+        onClick={() => {
+          const connector = connectors?.[0];
+          if (connector) connect({ connector });
+        }}
+        disabled={isPending || !connectors?.length}
       >
-        {isPending ? "Connecting…" : "Connect wallet"}
+        {isPending ? "Connecting…" : connectors?.length ? "Connect wallet" : "No wallet detected"}
       </button>
       <button type="button" className="btn btn--ghost" onClick={() => addChain(LOCALHOST)}>
         Add Localhost
@@ -114,7 +118,9 @@ export default function App() {
           </li>
           <Nav />
           <li className="nav-right">
-            <ConnectWallet />
+            <ErrorBoundary inline>
+              <ConnectWallet />
+            </ErrorBoundary>
           </li>
         </ul>
       </header>

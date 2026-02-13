@@ -36,17 +36,15 @@ function bootstrap() {
   }
 
   ReactDOM.createRoot(rootEl).render(
-    <React.StrictMode>
-      <ErrorBoundary>
-        <BrowserRouter>
-          <WagmiProvider config={config}>
-            <QueryClientProvider client={queryClient}>
-              <App />
-            </QueryClientProvider>
-          </WagmiProvider>
-        </BrowserRouter>
-      </ErrorBoundary>
-    </React.StrictMode>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <WagmiProvider config={config}>
+          <QueryClientProvider client={queryClient}>
+            <App />
+          </QueryClientProvider>
+        </WagmiProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 
